@@ -1,5 +1,7 @@
 # JobDispatch
 
+[![Build Status](https://travis-ci.org/mobiledataanywhere/job_dispatch.png)](https://travis-ci.org/mobiledataanywhere/job_dispatch)
+
 Job Dispatch is a gem for dispatching jobs to workers in an asynchronous manner. 
 Job Dispatch does not require any specific database, deliberately separating the storage of jobs
 from the dispatching of jobs to workers.
