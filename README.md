@@ -25,6 +25,34 @@ Or install it yourself as:
 
 TODO: Write usage instructions here.
 
+JobDispatch will work with any Job model class, provided it fulfils the following:
+
+Attributes:
+
+ * queue
+ * status
+ * target
+ * method
+ * enqueued_at
+ * scheduled_at
+ * expire_execution_at
+ * completed_at
+ * timeout
+ * retry_count
+ * retry_delay
+ * result
+
+Class Methods:
+
+    dequeue_job_for_queue(queue, time=nil)
+
+This method is for retrieving a single PENDING job from the database and atomically
+marking it as being IN PROGRESS so that it can not be received again. It is the dispatcher's
+Responsibility to update its status to completed/failed and schedule a retry if the
+retry_count > 0.
+
+See the example model classes in the examples/ directory.
+
 ## Contributing
 
 1. Fork it
