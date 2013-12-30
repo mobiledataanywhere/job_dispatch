@@ -1,0 +1,26 @@
+#!/usr/bin/env ruby
+#
+# This command is expected to be run in the root of a Rails application which has a Job model class
+# and has an initializer to configure JobDispatch.
+
+ENV["RAILS_ENV"] ||= "development"
+APP_PATH = File.expand_path('../../config/application',  __FILE__)
+ROOT_DIR = File.expand_path("../..", __FILE__)
+
+# boot the rails app so workers can access rails models, etc.
+require_relative '../config/boot'
+
+# TODO: Find a way to start the dispatcher with only ActiveRecord/Mongoid skipping the rest of rails
+# as it uses ~100MB RAM.
+
+require_relative '../config/environment'
+
+$:.unshift(File.join(ROOT_DIR, "lib"))
+
+require 'rails'
+require 'rbczmq'
+require 'job_dispatch'
+
+JobDispatch.logger = Rails.logger
+worker = JobDispatch::Worker.new(JobDispatch.config.broker[:connect])
+worker.run

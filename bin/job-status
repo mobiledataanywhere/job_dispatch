@@ -1,0 +1,50 @@
+#!/usr/bin/env ruby
+#
+# This command is expected to be run in the root of a Rails application which has a Job model class
+# and has an initializer to configure JobDispatch.
+
+ENV["RAILS_ENV"] ||= "development"
+APP_PATH = File.expand_path('../../config/application',  __FILE__)
+ROOT_DIR = File.expand_path("../..", __FILE__)
+
+# boot the rails app so we can access the Rails stored job queue.
+require_relative '../config/boot'
+
+$:.unshift(File.join(ROOT_DIR, "lib"))
+
+require 'rbczmq'
+require 'job_dispatch'
+require 'json'
+
+repeat = 0
+
+if ARGV.count > 0
+  repeat = ARGV.first.to_i
+end
+
+status = JobDispatch::Status.new('tcp://127.0.0.1:5555')
+status.connect
+loop do
+  begin
+    Timeout.timeout(5) do
+      status.fetch
+      status.print
+    end
+
+    if repeat > 0
+      sleep(repeat)
+    else
+      break
+    end
+
+  rescue TimeoutError
+    # message may have been sent and we might be waiting for a reply that never comes, so
+    # close socket and reconnect.
+    puts "Job Dispatcher status: No response from broker, reconnecting..."
+    status.disconnect
+    status.connect
+  rescue Interrupt
+    exit 0
+  end
+end
+status.disconnect
