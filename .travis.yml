@@ -5,3 +5,6 @@ rvm:
   - rbx
 gemfile:
   - Gemfile
+matrix:
+  allow_failures:
+    - rvm: rbx
