@@ -1,3 +1,5 @@
+require 'text-table'
+
 module JobDispatch
   class Status
 
@@ -11,7 +13,7 @@ module JobDispatch
     def connect
       if @socket.nil?
         @socket = JobDispatch.context.socket(ZMQ::REQ)
-        @socket.connect('tcp://127.0.0.1:5555')
+        @socket.connect(@connect_address)
       end
     end
 
@@ -29,47 +31,45 @@ module JobDispatch
     def print
       puts "Job Dispatcher status: #{@status[:status]}"
       puts ""
-      puts "%-16s %s" % ['Queue', 'Status']
-      puts "%-16s %s" % ['-----', '------']
+
+      table = Text::Table.new
+      table.head = ['Queue', 'Worker ID', 'Status', 'Job ID', 'Job Details']
+      table.rows = []
+
       @status[:queues].each do |queue, workers|
-        puts "%-16s %6d idle worker(s):" % [queue, workers.count]
-        workers.each_with_index do |worker, index|
-          puts "                        #%d %s" % [index, worker]
+        if workers.empty?
+          table.rows << [
+              queue,
+              '- no workers -',
+              '',
+              '',
+              '',
+          ]
+        else
+          workers.each_pair do |worker_id, worker_status|
+
+            job = worker_status[:job]
+            if job
+              params_str = if job[:parameters]
+                             job[:parameters].map(&:inspect).join(',')[0..20]
+                           else
+                             ''
+                           end
+              job_details = "#{job[:target]}.#{job[:method]}(#{params_str})"
+            end
+
+            table.rows << [
+                queue,
+                worker_id,
+                worker_status[:status],
+                worker_status[:job_id],
+                job_details,
+            ]
+          end
         end
       end
 
-      puts ""
-      puts "Jobs in progress:"
-      puts ""
-
-
-      column_widths = [0,0,0,0]
-      table = []
-
-      @status[:in_progress].each_pair do |job_id, job|
-        params_str = if job[:job][:parameters]
-                       job[:job][:parameters].map(&:inspect).join(',')[0..20]
-                     else
-                       ''
-                     end
-        desc = "#{job[:job][:target]}.#{job[:job][:method]}(#{params_str})"
-        row = [job_id,  job[:worker_id], job[:job][:expire_execution_at], desc[0..40]]
-        row.each_with_index do |string,index|
-          column_widths[index] = [column_widths[index], string.length].max
-        end
-        table << row
-      end
-
-      format = column_widths.map{|w| "%-#{w}s"}.join('  ')
-      puts format % ['JobId', 'Worker', 'Expires', 'Details']
-      puts format % ['-----', '------', '-------', '-------']
-
-      table.each {|row| puts format % row }
-
-      if @status[:in_progress].empty?
-        puts " -- no jobs in progress"
-      end
-
+      puts table.to_s
     end
 
   end

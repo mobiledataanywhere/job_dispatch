@@ -7,17 +7,21 @@ ENV["RAILS_ENV"] ||= "development"
 ROOT_DIR = Dir.pwd
 APP_PATH = File.expand_path('config/application.rb', ROOT_DIR)
 
-unless File.exists?(APP_PATH)
-  $stderr.puts "No Rails application found. Please run this command from the root directory of a rails app."
+unless File.exist?('config/job_dispatch.yml')
+  $stderr.puts "Configuration file at 'config/job_dispatch.yml' not found."
   exit 1
 end
+
+require 'job_dispatch'
+JobDispatch.load_config_from_yml('config/job_dispatch.yml', ENV["RAILS_ENV"])
 
 # boot the rails app so we can access the Rails stored job queue.
 require File.expand_path('config/boot.rb', ROOT_DIR)
 
 $:.unshift(File.join(ROOT_DIR, "lib"))
 
-require 'job_dispatch'
+
+require 'job_dispatch/status'
 require 'json'
 
 repeat = 0

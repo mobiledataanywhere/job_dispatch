@@ -18,6 +18,7 @@ module JobDispatch
   autoload :Status
   autoload :Worker
   autoload :Identity
+  autoload :Signaller
 
   def configure(&block)
     Configuration.configure(&block)
@@ -25,6 +26,19 @@ module JobDispatch
 
   def config
     Configuration.config
+  end
+
+  def load_config_from_yml(filename='config/job_dispatch.yml', environment="default")
+    require 'yaml'
+    load_config(YAML.load_file(filename).with_indifferent_access[environment])
+  end
+
+  def load_config(hash)
+    configure do |c|
+      hash.each_pair do |key, value|
+        c[key] = value
+      end
+    end
   end
 
   # @return [ZMQ::Context] return or create a ZeroMQ context.
@@ -70,6 +84,8 @@ module JobDispatch
   module_function :configure
   module_function :config
   module_function :enqueue
+  module_function :load_config
+  module_function :load_config_from_yml
 
   mattr_accessor :logger
   mattr_accessor :signaller

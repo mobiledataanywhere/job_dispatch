@@ -13,6 +13,7 @@ describe JobDispatch::Broker do
 
   let(:worker_id) { Identity.new([0, 0x80, 0, 0x41, 0x31].pack('c*')) }
   let(:worker_id2) { Identity.new([0, 0x80, 0, 0x41, 0x32].pack('c*')) }
+  let(:worker_id3) { Identity.new([0, 0x80, 0, 0x41, 0x33].pack('c*')) }
 
   context "tracking communication state" do
 
@@ -48,6 +49,10 @@ describe JobDispatch::Broker do
     context "'status'" do
       let(:command) { Command.new(worker_id, {command: 'status'}) }
 
+      before :each do
+        subject.reply_exceptions = false
+      end
+
       it "returns a command" do
         expect(subject.process_command(command)).to be_a(Command)
       end
@@ -57,14 +62,49 @@ describe JobDispatch::Broker do
         expect(result.worker_id).to eq(worker_id)
         expect(result.parameters).to be_a(Hash)
         expect(result.parameters[:status]).to eq('OK')
-        expect(result.parameters[:workers]).to be_a(Hash)
         expect(result.parameters[:queues]).to be_a(Hash)
       end
 
-      it "returns a JSONable paramters object" do
+      it "returns a JSONable parameters object" do
         subject.process_command(Command.new(worker_id2, {command: 'ready', worker_name: 'test worker'}))
         result = subject.process_command(command)
         expect { json = JSON.dump(result.parameters) }.not_to raise_error
+      end
+
+      it "returns a list of workers including idle and working" do
+        subject.workers_waiting_for_reply << worker_id2
+        subject.process_command(Command.new(worker_id2, {command: 'ready', worker_name: 'test worker 1'}))
+        subject.workers_waiting_for_reply << worker_id3
+        subject.process_command(Command.new(worker_id3, {command: 'ready', worker_name: 'test worker 2'}))
+
+
+        @job = FactoryGirl.build :job
+        @socket = double('Broker::Socket', :send_command => nil)
+        subject.stub(:socket => @socket)
+        @socket.should_receive(:send_command) do |cmd|
+          #expect(cmd.worker_id).to eq(worker_id)
+          expect(cmd.parameters[:command]).to eq('job')
+          expect(cmd.parameters[:target]).to eq(@job.target)
+        end
+
+        job_class = double('JobClass')
+        job_class.stub(:dequeue_job_for_queue).and_return(@job)
+        JobDispatch.config.job_class = job_class
+
+        # dispatch a job to a worker
+        subject.dispatch_jobs_to_workers
+
+        # now get status
+        result = subject.process_command(command)
+
+        expect(result.parameters[:queues]).to be_a(Hash)
+        expect(result.parameters[:queues].size).to eq(1)
+        expect(result.parameters[:queues][:default]).to be_a(Hash)
+        expect(result.parameters[:queues][:default][worker_id2.to_hex]).to be_a(Hash)
+        expect(result.parameters[:queues][:default][worker_id2.to_hex][:status]).to eq(:processing)
+        expect(result.parameters[:queues][:default][worker_id2.to_hex][:job_id]).to eq(@job.id)
+        expect(result.parameters[:queues][:default][worker_id3.to_hex]).to be_a(Hash)
+        expect(result.parameters[:queues][:default][worker_id3.to_hex][:status]).to eq(:idle)
       end
     end
 

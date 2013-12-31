@@ -29,6 +29,7 @@ module JobDispatch
     attr :status
     attr :job_subscribers # Key: job_id, value: list of Socket Identities waiting for job completion notifications.
     attr :pub_socket
+    attr_accessor :reply_exceptions
 
     def initialize(worker_bind_address, wakeup_bind_address, publish_bind_address=nil)
       @worker_bind_address = worker_bind_address
@@ -46,6 +47,9 @@ module JobDispatch
       @worker_names = {} # Key: Symbol socket identity, value: String claimed name of worker
       @job_subscribers = {} # Key: job_id, value: list of Socket Identities waiting for job completion notifications.
       @status = "OK"
+      @reply_exceptions = true
+
+      queues[:default] # ensure the default queue exists.
     end
 
     def running?
@@ -209,9 +213,14 @@ module JobDispatch
       rescue RSpec::Expectations::ExpectationNotMetError
         raise # allow test exceptions through.
       rescue StandardError => e
-        # all others reply over socket.
-        JobDispatch.logger.error(e.to_s)
-        reply.parameters = {:status => 'error', :message => e.to_s}
+        if reply_exceptions
+          # all others reply over socket.
+          JobDispatch.logger.error(e.to_s)
+          reply.parameters = {:status => 'error', :message => e.to_s}
+        else
+          # used during testing to raise errors so that Rspec can catch them as a test failure.
+          raise
+        end
       end
 
       reply
@@ -243,7 +252,7 @@ module JobDispatch
       JobDispatch.logger.info("Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
       queue = command.queue
       idle_worker = IdleWorker.new(command.worker_id, Time.now, queue, command.worker_name)
-      @workers_waiting_for_jobs[command.worker_id] = idle_worker
+      workers_waiting_for_jobs[command.worker_id] = idle_worker
       queues[queue] << command.worker_id
       worker_names[command.worker_id] = command.worker_name
     end
@@ -369,23 +378,38 @@ module JobDispatch
 
 
     def status_response
-      in_progress = jobs_in_progress.each_with_object({}) do |(job_id, job), hash|
-        hash[job_id] = {
-            :worker_id => @jobs_in_progress_workers[job_id],
+      response = {
+          :status => status,
+          :queues => {}
+      }
+
+      queues.each_pair do |queue, workers|
+        response[:queues][queue] = {}
+      end
+
+      jobs_in_progress.each_with_object(response[:queues]) do |(job_id, job), _queues|
+        queue = job.queue
+        _queues[queue] ||= {}
+        worker_id = jobs_in_progress_workers[job_id]
+        _queues[queue][worker_id.to_hex] = {
+            :status => :processing,
+
+            :job_id => job_id,
+            :queue => job.queue,
             :job => json_for_job(job),
         }
       end
 
-      workers = workers_waiting_for_jobs.each_with_object({}) do |(worker_id, worker), hash|
-        hash[worker_id.to_hex] = worker
+      workers_waiting_for_jobs.each_with_object(response[:queues]) do |(worker_id, worker), _queues|
+        queue = worker.queue
+        _queues[queue] ||= {}
+        _queues[queue][worker_id.to_hex] = {
+            :status => :idle,
+            :queue => worker.queue,
+        }
       end
 
-      {
-          :status => status,
-          :workers => workers,
-          :queues => queues,
-          :in_progress => in_progress
-      }
+      response
     end
 
     # reset the timeout on the job. Called for a long process to confirm to the dispatcher that the worker is
