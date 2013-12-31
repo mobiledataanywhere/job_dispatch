@@ -184,7 +184,7 @@ module JobDispatch
               job_subscribers[job_id.to_s] << command.worker_id
               reply = nil
             else
-              job = job_source.find(job_id) #pass error exception back to requester
+              job = job_source.find(job_id) # load job from storage and return to requester.
               reply.parameters = job_status_parameters(job)
             end
 

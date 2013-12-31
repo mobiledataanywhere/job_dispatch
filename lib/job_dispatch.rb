@@ -13,12 +13,13 @@ module JobDispatch
   extend ActiveSupport::Autoload
 
   autoload :Broker
+  autoload :Client
   autoload :Configuration
+  autoload :Identity
   autoload :Job
+  autoload :Signaller
   autoload :Status
   autoload :Worker
-  autoload :Identity
-  autoload :Signaller
 
   def configure(&block)
     Configuration.configure(&block)

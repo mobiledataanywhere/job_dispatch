@@ -2,9 +2,9 @@ module JobDispatch
 
   # This is a simple class for making synchronous calls to the Job Queue dispatcher.
   class Client
-    def initialize(connect_address)
+    def initialize(connect_address=nil)
       @socket = JobDispatch.context.socket(ZMQ::REQ)
-      @socket.connect(connect_address)
+      @socket.connect(connect_address || JobDispatch.config.broker[:connect])
     end
 
     def send_request(command, options={})
@@ -25,6 +25,14 @@ module JobDispatch
       Proxy.new(self, target)
     end
 
+    def enqueue(job_attrs)
+      send_request('enqueue', {job: job_attrs})
+    end
+
+    def notify(job_id)
+      send_request('notify', {job_id: job_id})
+    end
+
     class Proxy
       def initialize(client, target)
         @client = client
@@ -39,7 +47,7 @@ module JobDispatch
       end
 
       def method_missing(method, *args)
-        @client.enqueue(job: {target: @target, method: method.to_s, parameters: args})
+        @client.enqueue(target: @target, method: method.to_s, parameters: args)
       end
     end
   end
