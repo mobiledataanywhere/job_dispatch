@@ -31,7 +31,9 @@ module JobDispatch
 
   def load_config_from_yml(filename='config/job_dispatch.yml', environment="default")
     require 'yaml'
-    load_config(YAML.load_file(filename).with_indifferent_access[environment])
+    _config = YAML.load_file(filename).with_indifferent_access
+    _config = _config[environment] || _config[:default]
+    load_config(_config)
   end
 
   def load_config(hash)
