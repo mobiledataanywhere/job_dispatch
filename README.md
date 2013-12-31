@@ -26,10 +26,18 @@ Or install it yourself as:
 
 ## Requirements
 
+### Dispatcher
+
 This gem uses [rbczmq](https://github.com/methodmissing/rbczmq) for sending messages, so its use is limited to
 platforms supporting this gem, namely a posix OS and MRI Ruby or Rubinius.
 
 JRuby is not supported. Nor is Windows.
+
+### Workers
+
+The built in Ruby worker has the same ruby requirements as the broker. However, additional workers can be implemented in any
+language on any platform provided they have access to ZeroMQ for messaging and a JSON library for reading/writing message payloads.
+
 
 ## Usage
 
@@ -39,18 +47,18 @@ JobDispatch will work with any Job model class, provided it fulfils the followin
 
 Attributes:
 
- * queue
- * status
- * target
- * method
- * enqueued_at
- * scheduled_at
- * expire_execution_at
- * completed_at
- * timeout
- * retry_count
- * retry_delay
- * result
+ * `queue`
+ * `status`
+ * `target`
+ * `method`
+ * `enqueued_at`
+ * `scheduled_at`
+ * `expire_execution_at`
+ * `completed_at`
+ * `timeout`
+ * `retry_count`
+ * `retry_delay`
+ * `result`
 
 Class Methods:
 
