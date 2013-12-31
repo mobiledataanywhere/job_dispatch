@@ -23,6 +23,14 @@ Or install it yourself as:
 
     $ gem install job_dispatch
 
+
+## Requirements
+
+This gem uses [rbczmq](https://github.com/methodmissing/rbczmq) for sending messages, so its use is limited to
+platforms supporting this gem, namely a posix OS and MRI Ruby or Rubinius.
+
+JRuby is not supported. Nor is Windows.
+
 ## Usage
 
 TODO: Write usage instructions here.
