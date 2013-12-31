@@ -4,23 +4,34 @@
 # and has an initializer to configure JobDispatch.
 
 ENV["RAILS_ENV"] ||= "development"
-APP_PATH = File.expand_path('../../config/application',  __FILE__)
-ROOT_DIR = File.expand_path("../..", __FILE__)
+ROOT_DIR = Dir.pwd
+APP_PATH = File.expand_path('config/application.rb', ROOT_DIR)
 
-# boot the rails app so workers can access rails models, etc.
-require_relative '../config/boot'
+unless File.exists?(APP_PATH)
+  $stderr.puts "No Rails application found. Please run this command from the root directory of a rails app."
+  exit 1
+end
+
+# boot the rails app so we can access the Rails stored job queue.
+require File.expand_path('config/boot.rb', ROOT_DIR)
 
 # TODO: Find a way to start the dispatcher with only ActiveRecord/Mongoid skipping the rest of rails
 # as it uses ~100MB RAM.
 
-require_relative '../config/environment'
+require File.expand_path('config/environment.rb', ROOT_DIR)
 
 $:.unshift(File.join(ROOT_DIR, "lib"))
 
 require 'rails'
-require 'rbczmq'
 require 'job_dispatch'
 
 JobDispatch.logger = Rails.logger
-worker = JobDispatch::Worker.new(JobDispatch.config.broker[:connect])
+
+endpoint = JobDispatch.config.broker[:connect]
+if endpoint.nil? || endpoint.empty?
+  $stderr.puts "No Job Dispatch broker connect address has been specified."
+  exit 1
+end
+
+worker = JobDispatch::Worker.new(endpoint)
 worker.run

@@ -111,19 +111,5 @@ module JobDispatch
   end
 end
 
-require 'job_queue/worker/socket'
-require 'job_queue/worker/item'
-
-if false
-  w = JobDispatch::Worker.new('tcp://127.0.0.1:5555', 'funky')
-  w.connect
-
-  w2 = JobDispatch::Worker.new('tcp://127.0.0.1:5555', 'funky')
-  w2.connect
-
-  w.socket.ask_for_work('funky')
-  w2.socket.socket.send(JSON.dump({command:'status'}))
-  i=w2.socket.socket.recv
-  puts "Status: #{i}"
-  w.socket.socket.recv
-end
+require 'job_dispatch/worker/socket'
+require 'job_dispatch/worker/item'
