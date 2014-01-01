@@ -1,6 +1,6 @@
-require "job_dispatch/version"
+# encoding: UTF-8
 
-#require 'job_dispatch/broker'
+require "job_dispatch/version"
 
 require 'active_support/dependencies/autoload'
 require 'active_support/core_ext/hash/indifferent_access'

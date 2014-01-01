@@ -1,3 +1,5 @@
+# encoding: UTF-8
+
 module JobDispatch
 
   # This is a simple class for making synchronous calls to the Job Queue dispatcher.
