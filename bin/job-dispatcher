@@ -12,6 +12,10 @@ unless File.exist?('config/job_dispatch.yml')
   exit 1
 end
 
+if ENV['BUNDLE_GEMFILE'] || File.exists('Gemfile')
+  require 'bundler/setup'
+end
+
 require 'job_dispatch'
 JobDispatch.load_config_from_yml('config/job_dispatch.yml', ENV["RAILS_ENV"])
 
