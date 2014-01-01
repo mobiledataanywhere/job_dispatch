@@ -11,15 +11,18 @@ module JobDispatch
 
     attr :socket
     attr :queue
+    attr :item_class
 
-    def initialize(connect_address, queue='default')
+    def initialize(connect_address, options={})
+      options ||= {}
       @connect_address = connect_address
-      @queue = queue
+      @queue = options[:queue] || 'default'
       @running = false
+      @item_class = options[:item_class] || Worker::Item
     end
 
     def connect
-      @socket ||= Worker::Socket.new(@connect_address)
+      @socket ||= Worker::Socket.new(@connect_address, item_class)
       Thread.current["JobDispatch::Worker.socket"] = @socket
     end
 

@@ -6,10 +6,12 @@ module JobDispatch
     class Socket
 
       attr :socket
+      attr :item_class
 
-      def initialize(connect_address)
+      def initialize(connect_address, item_klass)
         @socket = JobDispatch.context.socket(ZMQ::REQ)
         @socket.connect(connect_address)
+        @item_class = item_klass
       end
 
       def poll_item
@@ -17,12 +19,10 @@ module JobDispatch
       end
 
       def ask_for_work(queue)
-        puts "Asking for work on queue: #{queue}"
         @socket.send(JSON.dump({command: 'ready', queue: queue, worker_name: identity}))
       end
 
       def send_goodbye(queue)
-        puts "Sending goodbye to broker."
         @socket.send(JSON.dump({command: 'goodbye', worker_name: identity}))
       end
 
@@ -45,25 +45,23 @@ module JobDispatch
       def read_item
         json = @socket.recv
         begin
-          puts "Received: #{json}"
           params = JSON.parse(json)
           case params["command"]
             when "job"
-              item = Item.new params["target"], params["method"], *params["parameters"]
+              item = item_class.new params["target"], params["method"], *params["parameters"]
             when "idle"
-              item = Item.new "JobDispatch", "idle"
+              item = item_class.new "JobDispatch", "idle"
             when "quit"
               puts "It's quittin' time!"
-              exit(0)
+              Process.exit(0)
             else
-              item = Item.new "JobDispatch", "unknown_command", params
+              item = item_class.new "JobDispatch", "unknown_command", params
           end
           item.job_id = params["job_id"]
         rescue StandardError => e
-          puts "Failed to read message from worker socket: #{e}"
+          JobDispatch.logger.error "Failed to read message from worker socket: #{e}"
           nil
         end
-        puts "Received item of work to do: #{item.inspect}"
         item
       end
 

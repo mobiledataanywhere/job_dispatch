@@ -35,5 +35,5 @@ if endpoint.nil? || endpoint.empty?
   exit 1
 end
 
-worker = JobDispatch::Worker.new(endpoint)
+worker = JobDispatch::Worker.new(endpoint, JobDispatch.config.worker_options)
 worker.run
