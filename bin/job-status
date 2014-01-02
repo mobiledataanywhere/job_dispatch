@@ -3,7 +3,6 @@
 # This command is expected to be run in the root of a Rails application which has a Job model class
 # and has an initializer to configure JobDispatch.
 
-ENV["RAILS_ENV"] ||= "development"
 ROOT_DIR = Dir.pwd
 APP_PATH = File.expand_path('config/application.rb', ROOT_DIR)
 
@@ -17,10 +16,12 @@ if ENV['BUNDLE_GEMFILE'] || File.exists('Gemfile')
 end
 
 require 'job_dispatch'
-JobDispatch.load_config_from_yml('config/job_dispatch.yml', ENV["RAILS_ENV"])
 
 # boot the rails app so we can access the Rails stored job queue.
 require File.expand_path('config/boot.rb', ROOT_DIR)
+
+ENV["RAILS_ENV"] ||= "development"
+JobDispatch.load_config_from_yml('config/job_dispatch.yml', ENV["RAILS_ENV"])
 
 $:.unshift(File.join(ROOT_DIR, "lib"))
 
