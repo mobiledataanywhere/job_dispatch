@@ -256,7 +256,9 @@ module JobDispatch
       idle_worker = IdleWorker.new(command.worker_id, Time.now, queue, command.worker_name)
       workers_waiting_for_jobs[command.worker_id] = idle_worker
       queues[queue] << command.worker_id
-      worker_names[command.worker_id] = command.worker_name
+      if command.worker_name # this is only sent on initial requests.
+        worker_names[command.worker_id] = command.worker_name
+      end
     end
 
     # remove a worker from available list. Worker is shutting down or indicating that it will no longer

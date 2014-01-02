@@ -44,6 +44,7 @@ module JobDispatch
               '',
               '',
               '',
+              '',
           ]
         else
           workers.each_pair do |worker_id, worker_status|
