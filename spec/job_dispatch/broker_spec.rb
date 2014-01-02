@@ -426,6 +426,28 @@ describe JobDispatch::Broker do
       expect(subject.jobs_in_progress).to be_empty
       expect(subject.jobs_in_progress_workers).to be_empty
     end
+
+
+    it "include InternalJob commands" do
+      socket = double('Broker::Socket')
+      subject.stub(:socket => socket)
+      socket.stub(:send_command => true)
+
+      # send ready command => adds idle worker state
+      subject.workers_waiting_for_reply << worker_id # simulating read_command
+      @result = subject.process_command(Command.new(worker_id, {
+          command: 'ready',
+          queue: 'example',
+          worker_name: 'ruby worker',
+      }))
+      subject.send_idle_commands(Time.now + JobDispatch::Broker::WORKER_IDLE_TIME + 10)
+      expect(subject.jobs_in_progress_workers.length).to eq(1)
+      @time = Time.now + JobDispatch::Broker::WORKER_IDLE_TIME + 10 + JobDispatch::Job::DEFAULT_EXECUTION_TIMEOUT + 10
+      JobDispatch::Broker::InternalJob.any_instance.should_not_receive(:failed!)
+      Timecop.freeze(@time) do
+        subject.expire_timed_out_jobs
+      end
+    end
   end
 
   context "touching a job" do

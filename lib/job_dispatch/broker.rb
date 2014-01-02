@@ -325,7 +325,9 @@ module JobDispatch
       expired_job_ids.each do |job_id|
         job = jobs_in_progress.delete(job_id)
         @jobs_in_progress_workers.delete(job_id)
-        if job
+        if job.is_a? InternalJob
+          # no action / publish required
+        elsif job
           job.failed!("job timed out")
           publish_job_status(job)
         end
@@ -347,22 +349,20 @@ module JobDispatch
         jobs_in_progress_workers.delete(job_id)
         if job.is_a? InternalJob
           # no publish or save action required.
-        else
-          if job
-            job.reload
-            JobDispatch.logger.info(
-                "completed job #{job_id} from worker #{command.worker_id.to_json} status = #{command.parameters[:status]}")
-            if command.success?
-              job.succeeded!(command.parameters[:result])
-              publish_job_status(job)
-            else
-              job.failed!(command.parameters[:result])
-              publish_job_status(job)
-            end
+        elsif job
+          job.reload
+          JobDispatch.logger.info(
+              "completed job #{job_id} from worker #{command.worker_id.to_json} status = #{command.parameters[:status]}")
+          if command.success?
+            job.succeeded!(command.parameters[:result])
+            publish_job_status(job)
           else
-            JobDispatch.logger.error("Job #{job_id} completed, but does not exist. Probably timed out!")
-            raise "No job"
+            job.failed!(command.parameters[:result])
+            publish_job_status(job)
           end
+        else
+          JobDispatch.logger.error("Job #{job_id} completed, but does not exist. Probably timed out!")
+          raise "No job"
         end
       end
     end
