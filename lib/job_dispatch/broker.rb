@@ -233,15 +233,29 @@ module JobDispatch
       idle_time -= WORKER_IDLE_TIME
       idle_workers = @workers_waiting_for_jobs.select { |worker_id, worker| worker.idle_since < idle_time }
       idle_workers.each do |worker_id, worker|
-        send_job_to_worker({:command => 'idle'}, worker_id)
+        send_job_to_worker(InternalJob.new('idle', worker.queue), worker_id)
       end
     end
 
 
-    def send_job_to_worker(hash, worker_id)
+    def send_job_to_worker(job, worker_id)
       # remove from queue and idle workers lists.
-      idle_worker = @workers_waiting_for_jobs.delete(worker_id)
-      @queues[idle_worker.queue].delete(worker_id)
+      idle_worker = workers_waiting_for_jobs.delete(worker_id)
+      queues[idle_worker.queue].delete(worker_id)
+
+      # serialise job for json message
+      hash = json_for_job(job)
+
+      # use the job record id or assign a uuid as the job id
+      job_id = job.id ? job.id.to_s : SecureRandom.uuid
+      hash[:job_id] = job_id
+      hash[:command] = 'job' unless job.is_a?(InternalJob)
+      job_id = hash[:job_id] ||= SecureRandom.uuid
+
+      # add to working lists
+      jobs_in_progress[job_id] = job
+      jobs_in_progress_workers[job_id] = worker_id
+
       # send the command.
       command = Broker::Command.new(worker_id, hash)
       JobDispatch.logger.info("Sending command '#{hash[:command]}' to worker: #{worker_id.to_json}")
@@ -288,24 +302,14 @@ module JobDispatch
           worker_id = worker_ids.first
           job = job_source.dequeue_job_for_queue(queue.to_s)
           if job
-            hash = json_for_job(job)
-
-            # use the job record id or assign a uuid as the job id
-            job_id = (job.id || SecureRandom.uuid).to_s
-            hash[:job_id] = job_id
-            hash[:command] = 'job'
-
-            JobDispatch.logger.info("dispatching job #{job_id} to worker #{worker_id.to_json}")
-            send_job_to_worker(hash, worker_id)
+            JobDispatch.logger.info("dispatching job #{job.id} to worker #{worker_id.to_json}")
+            send_job_to_worker(job, worker_id)
 
             job.expire_execution_at = Time.now + (job.timeout || Job::DEFAULT_EXECUTION_TIMEOUT)
             job.status = JobDispatch::Job::IN_PROGRESS
             job.save
 
             publish_job_status(job)
-
-            @jobs_in_progress[job_id] = job
-            @jobs_in_progress_workers[job_id] = worker_id
           end
         end
       end
@@ -340,21 +344,25 @@ module JobDispatch
       job_id = command.parameters[:job_id]
       if job_id
         job = jobs_in_progress.delete(job_id)
-        @jobs_in_progress_workers.delete(job_id)
-        if job
-          job.reload
-          JobDispatch.logger.info(
-              "completed job #{job_id} from worker #{command.worker_id.to_json} status = #{command.parameters[:status]}")
-          if command.success?
-            job.succeeded!(command.parameters[:result])
-            publish_job_status(job)
-          else
-            job.failed!(command.parameters[:result])
-            publish_job_status(job)
-          end
+        jobs_in_progress_workers.delete(job_id)
+        if job.is_a? InternalJob
+          # no publish or save action required.
         else
-          JobDispatch.logger.error("Job #{job_id} completed, but does not exist. Probably timed out!")
-          raise "No job"
+          if job
+            job.reload
+            JobDispatch.logger.info(
+                "completed job #{job_id} from worker #{command.worker_id.to_json} status = #{command.parameters[:status]}")
+            if command.success?
+              job.succeeded!(command.parameters[:result])
+              publish_job_status(job)
+            else
+              job.failed!(command.parameters[:result])
+              publish_job_status(job)
+            end
+          else
+            JobDispatch.logger.error("Job #{job_id} completed, but does not exist. Probably timed out!")
+            raise "No job"
+          end
         end
       end
     end
@@ -364,8 +372,8 @@ module JobDispatch
 
       quit_params = {command: 'quit'}
       until workers_waiting_for_jobs.empty?
-        worker_id = @workers_waiting_for_jobs.first.first
-        send_job_to_worker(quit_params, worker_id)
+        worker_id, worker = workers_waiting_for_jobs.first
+        send_job_to_worker(InternalJob.new('quit', worker.queue), worker_id)
       end
     end
 
@@ -387,7 +395,7 @@ module JobDispatch
           :queues => {}
       }
 
-      queues.each_pair do |queue, workers|
+      queues.each_pair do |queue, _|
         response[:queues][queue] = {}
       end
 
@@ -488,4 +496,5 @@ module JobDispatch
 end
 
 require 'job_dispatch/broker/command'
+require 'job_dispatch/broker/internal_job'
 require 'job_dispatch/broker/socket'
