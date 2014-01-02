@@ -395,7 +395,7 @@ module JobDispatch
         worker_id = jobs_in_progress_workers[job_id]
         _queues[queue][worker_id.to_hex] = {
             :status => :processing,
-
+            :name => worker_names[worker_id],
             :job_id => job_id,
             :queue => job.queue,
             :job => json_for_job(job),
@@ -407,6 +407,7 @@ module JobDispatch
         _queues[queue] ||= {}
         _queues[queue][worker_id.to_hex] = {
             :status => :idle,
+            :name => worker_names[worker_id],
             :queue => worker.queue,
         }
       end

@@ -33,7 +33,7 @@ module JobDispatch
       puts ""
 
       table = Text::Table.new
-      table.head = ['Queue', 'Worker ID', 'Status', 'Job ID', 'Job Details']
+      table.head = ['Queue', 'Worker ID', 'Worker Name', 'Status', 'Job ID', 'Job Details']
       table.rows = []
 
       @status[:queues].each do |queue, workers|
@@ -61,6 +61,7 @@ module JobDispatch
             table.rows << [
                 queue,
                 worker_id,
+                worker_status[:name],
                 worker_status[:status],
                 worker_status[:job_id],
                 job_details,

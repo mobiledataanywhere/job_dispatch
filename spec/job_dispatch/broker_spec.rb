@@ -103,8 +103,10 @@ describe JobDispatch::Broker do
         expect(result.parameters[:queues][:default][worker_id2.to_hex]).to be_a(Hash)
         expect(result.parameters[:queues][:default][worker_id2.to_hex][:status]).to eq(:processing)
         expect(result.parameters[:queues][:default][worker_id2.to_hex][:job_id]).to eq(@job.id)
+        expect(result.parameters[:queues][:default][worker_id2.to_hex][:name]).to eq('test worker 1')
         expect(result.parameters[:queues][:default][worker_id3.to_hex]).to be_a(Hash)
         expect(result.parameters[:queues][:default][worker_id3.to_hex][:status]).to eq(:idle)
+        expect(result.parameters[:queues][:default][worker_id3.to_hex][:name]).to eq('test worker 2')
       end
     end
 
