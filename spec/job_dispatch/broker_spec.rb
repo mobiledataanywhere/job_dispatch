@@ -413,6 +413,30 @@ describe JobDispatch::Broker do
         subject.dispatch_jobs_to_workers
       end
     end
+
+    context "when an error occurs dequeuing jobs" do
+      before :each do
+        @job_class = double('JobClass')
+        @job_class.stub(:dequeue_job_for_queue).and_raise(StandardError, "something bad happened")
+        JobDispatch.config.job_class = @job_class
+      end
+
+      it "behaves as if there was no job" do
+        # send ready command => adds idle worker state
+        subject.workers_waiting_for_reply << worker_id # simulating read_command
+        @result = subject.process_command(Command.new(worker_id, {
+            command: 'ready',
+            queue: 'example',
+            worker_name: 'ruby worker',
+        }))
+        expect(@result).to be_nil # no immediate response
+        expect(subject.workers_waiting_for_jobs[worker_id]).not_to be_nil
+
+        # no job should be sent
+        subject.should_not_receive(:send_job_to_worker)
+        expect { subject.dispatch_jobs_to_workers }.not_to raise_error
+      end
+    end
   end
 
   context "expired jobs" do

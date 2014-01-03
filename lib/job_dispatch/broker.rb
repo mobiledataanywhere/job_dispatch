@@ -300,7 +300,16 @@ module JobDispatch
         # we only need to check the database if there are available workers in that queue
         if worker_ids.count > 0
           worker_id = worker_ids.first
-          job = job_source.dequeue_job_for_queue(queue.to_s)
+
+          job = begin
+            job_source.dequeue_job_for_queue(queue.to_s)
+          rescue StandardError => e
+            # Log any errors reported dequeuing jobs, and treat it as no jobs available. This could
+            # be, for example, that the database is not contactable at this point in time.
+            JobDispatch.logger.error "JobDispatch::Broker#dispatch_jobs_to_workers: #{e}"
+            nil
+          end
+
           if job
             JobDispatch.logger.info("dispatching job #{job.id} to worker #{worker_id.to_json}")
             send_job_to_worker(job, worker_id)
