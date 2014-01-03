@@ -26,10 +26,11 @@ module JobDispatch
       @socket.send(JSON.dump({command:'status'}))
       json = @socket.recv
       @status = JSON.parse(json).with_indifferent_access
+      @time = Time.now
     end
 
     def print
-      puts "Job Dispatcher status: #{@status[:status]}"
+      puts "Job Dispatcher status: #{@status[:status]} at #{@time}"
       puts ""
 
       table = Text::Table.new
