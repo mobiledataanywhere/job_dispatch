@@ -23,8 +23,12 @@ module JobDispatch
       send_request(method, payload)
     end
 
-    def proxy_for(target)
-      Proxy.new(self, target)
+    def proxy_for(target, options={})
+      Proxy.new(self, target, options)
+    end
+
+    def synchronous_proxy_for(target, options={})
+      SynchronousProxy.new(self, target, options)
     end
 
     def enqueue(job_attrs)
@@ -35,22 +39,8 @@ module JobDispatch
       send_request('notify', {job_id: job_id})
     end
 
-    class Proxy
-      def initialize(client, target)
-        @client = client
-        @target = case target
-                    when Class
-                      target.to_s
-                    when String
-                      target
-                    else
-                      raise NotImplementedError, "Don't yet know how to serialize an object instance as a target"
-                  end
-      end
-
-      def method_missing(method, *args)
-        @client.enqueue(target: @target, method: method.to_s, parameters: args)
-      end
-    end
   end
 end
+
+require 'job_dispatch/client/proxy'
+require 'job_dispatch/client/synchronous_proxy'
