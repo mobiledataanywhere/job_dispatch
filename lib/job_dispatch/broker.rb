@@ -396,11 +396,11 @@ module JobDispatch
       }
 
       queues.each_pair do |queue, _|
-        response[:queues][queue.to_s] = {}
+        response[:queues][queue.to_sym] = {}
       end
 
       jobs_in_progress.each_with_object(response[:queues]) do |(job_id, job), _queues|
-        queue = job.queue.to_s
+        queue = job.queue.to_sym
         _queues[queue] ||= {}
         worker_id = jobs_in_progress_workers[job_id]
         _queues[queue][worker_id.to_hex] = {
@@ -413,7 +413,7 @@ module JobDispatch
       end
 
       workers_waiting_for_jobs.each_with_object(response[:queues]) do |(worker_id, worker), _queues|
-        queue = worker.queue.to_s
+        queue = worker.queue.to_sym
         _queues[queue] ||= {}
         _queues[queue][worker_id.to_hex] = {
             :status => :idle,
