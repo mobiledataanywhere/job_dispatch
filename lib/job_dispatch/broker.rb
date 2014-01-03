@@ -10,8 +10,8 @@ module JobDispatch
   # is a job to do for a worker, or when a job is completed for a client waiting on job notification).
   class Broker
 
-    WORKER_IDLE_TIME = 10
-    POLL_TIME = 5
+    WORKER_IDLE_TIME = 10.123
+    POLL_TIME = 5.123
     STOP_SIGNALS = %w[INT TERM KILL]
 
     IdleWorker = Struct.new :worker_id, :idle_since, :queue, :worker_name
@@ -65,6 +65,7 @@ module JobDispatch
     def run
       begin
         puts "JobDispatch::Broker running in process #{Process.pid}"
+        puts "yeah baby"
         JobDispatch.logger.info("JobDispatch::Broker running in process #{Process.pid}")
         @running = true
         poller = ZMQ::Poller.new
@@ -113,7 +114,11 @@ module JobDispatch
 
 
     def process_messages(poller)
-      poller.poll(POLL_TIME)
+      # TODO: calculate the amount of time to sleep to wake up such that a scheduled event happens as close
+      # as possible to the time it was supposed to happen. This could additionally mean that the POLL_TIME
+      # could be arbitrarily large. As any communication with the broker will wake it immediately.
+      poll_time = POLL_TIME
+      poller.poll(poll_time)
 
       if @wake_socket && poller.readables.include?(@wake_socket)
         @wake_socket.recv # no message to process, just consume messages in order to wake the poller
