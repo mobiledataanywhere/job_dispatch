@@ -9,8 +9,9 @@ module JobDispatch
     class ProxyError < StandardError
       attr :response
 
-      def initialize(response)
+      def initialize(message, response=nil)
         @response = response
+        super(message)
       end
     end
   end

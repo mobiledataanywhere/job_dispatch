@@ -13,11 +13,12 @@ module JobDispatch
         if completed_job.nil?
           raise ProxyError.new("Internal error! There should not be a nil response from the broker.")
         end
+        result = completed_job["job"] && completed_job["job"]["result"]
         case completed_job["status"]
           when "failed"
-            raise ProxyError.new(completed_job)
+            raise ProxyError.new("Job failed: #{result}", completed_job)
           when "completed"
-            return completed_job["job"]["result"]
+            return result
           else
             raise ProxyError.new("Notify should not return for a pending or in progress job!")
         end
