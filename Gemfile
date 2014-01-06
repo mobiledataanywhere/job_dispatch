@@ -9,3 +9,12 @@ platforms :rbx do
   gem 'rubinius', '~> 2.0'
   gem "rubinius-coverage", github: "rubinius/rubinius-coverage"
 end
+
+group :test do
+  gem 'guard'
+  group :mac do
+    gem 'growl'
+    gem 'guard-rspec'
+    gem 'terminal-notifier-guard'
+  end
+end
