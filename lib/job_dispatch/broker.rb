@@ -145,7 +145,7 @@ module JobDispatch
     def send_command(command)
       raise "Worker not waiting for reply" unless workers_waiting_for_reply.include?(command.worker_id)
       workers_waiting_for_reply.delete(command.worker_id)
-      JobDispatch.logger.debug("sending command: #{command.inspect}")
+      JobDispatch.logger.debug("JobDispatch::Broker sending command: #{command.inspect}")
       socket.send_command command
     end
 
@@ -221,7 +221,7 @@ module JobDispatch
       rescue StandardError => e
         if reply_exceptions
           # all others reply over socket.
-          JobDispatch.logger.error(e.to_s)
+          JobDispatch.logger.error("JobDispatch::Broker #{e}")
           reply.parameters = {:status => 'error', :message => e.to_s}
         else
           # used during testing to raise errors so that Rspec can catch them as a test failure.
@@ -262,14 +262,14 @@ module JobDispatch
 
       # send the command.
       command = Broker::Command.new(worker_id, hash)
-      JobDispatch.logger.info("Sending command '#{hash[:command]}' to worker: #{worker_id.to_json}")
+      JobDispatch.logger.info("JobDispatch::Broker Sending command '#{hash[:command]}' to worker: #{worker_id.to_json}")
       send_command(command)
     end
 
 
     # add a worker to the list of workers available for jobs.
     def add_available_worker(command)
-      JobDispatch.logger.info("Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
+      JobDispatch.logger.info("JobDispatch::Broker Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
       queue = command.queue
       idle_worker = IdleWorker.new(command.worker_id, Time.now, queue, command.worker_name)
       workers_waiting_for_jobs[command.worker_id] = idle_worker
@@ -282,7 +282,7 @@ module JobDispatch
     # remove a worker from available list. Worker is shutting down or indicating that it will no longer
     # be available for doing work.
     def remove_available_worker(command)
-      JobDispatch.logger.info("Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
+      JobDispatch.logger.info("JobDispatch::Broker Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
 
       # the goodbye command is sent by another socket connection, so the worker_id (socket identity) will
       # not match the socket actually waiting for work.
@@ -315,7 +315,7 @@ module JobDispatch
           end
 
           if job
-            JobDispatch.logger.info("dispatching job #{job.id} to worker #{worker_id.to_json}")
+            JobDispatch.logger.info("JobDispatch::Broker dispatching job #{job.id} to worker #{worker_id.to_json}")
             send_job_to_worker(job, worker_id)
 
             job.expire_execution_at = Time.now + (job.timeout || Job::DEFAULT_EXECUTION_TIMEOUT)
@@ -341,6 +341,7 @@ module JobDispatch
         if job.is_a? InternalJob
           # no action / publish required
         elsif job
+          JobDispatch.logger.info("JobDispatch::Broker expiring job #{job_id} has timed out.")
           job.failed!("job timed out")
           publish_job_status(job)
         end
@@ -368,13 +369,15 @@ module JobDispatch
           begin
             job = JobDispatch.config.job_class.find(job_id)
           rescue StandardError => e
-            JobDispatch.logger.error("Job #{job_id} completed, but failed to reload from database: #{e}")
+            JobDispatch.logger.error("JobDispatch::Broker Job #{job_id} completed, but failed to reload from database: #{e}")
             job = nil
           end
 
           if job
             JobDispatch.logger.info(
-                "completed job #{job_id} from worker #{command.worker_id.to_json} status = #{command.parameters[:status]}")
+                "JobDispatch::Broker completed job #{job_id} " \
+                "from worker #{command.worker_id.to_json} " \
+                "status = #{command.parameters[:status]}")
             if command.success?
               job.succeeded!(command.parameters[:result])
               publish_job_status(job)
@@ -388,7 +391,7 @@ module JobDispatch
     end
 
     def process_quit
-      JobDispatch.logger.info("Sending quit message to idle workers")
+      JobDispatch.logger.info("JobDispatch::Broker Sending quit message to idle workers")
 
       quit_params = {command: 'quit'}
       until workers_waiting_for_jobs.empty?
@@ -496,7 +499,7 @@ module JobDispatch
         socket_ids.each do |socket_id|
           # send the command.
           command = Broker::Command.new(socket_id, parameters)
-          JobDispatch.logger.info("Sending job notification for job id '#{job.id}' status = #{status} to socket: #{socket_id.to_json}")
+          JobDispatch.logger.info("JobDispatch::Broker Sending job notification for job id '#{job.id}' status = #{status} to socket: #{socket_id.to_json}")
           send_command(command)
         end
       end
