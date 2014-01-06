@@ -15,6 +15,10 @@ describe JobDispatch::Broker do
   let(:worker_id2) { Identity.new([0, 0x80, 0, 0x41, 0x32].pack('c*')) }
   let(:worker_id3) { Identity.new([0, 0x80, 0, 0x41, 0x33].pack('c*')) }
 
+  before :each do
+    JobDispatch.config.job_class = double('JobClass')
+  end
+
   context "tracking communication state" do
 
     it "reading a command adds the requester to the list of connections awaiting reply" do
@@ -226,11 +230,21 @@ describe JobDispatch::Broker do
     context "'completed'" do
       let(:job_id) { '1234' }
       before :each do
-        @job = FactoryGirl.build :job
-        @job.stub(:succeeded! => true)
-        @job.stub(:failed! => true)
+        @job = FactoryGirl.build :job, :id => job_id
+        @job.stub(:succeeded!) do
+          @job.status = JobDispatch::Job::COMPLETED
+          true
+        end
+        @job.stub(:failed!) do
+          @job.status = JobDispatch::Job::FAILED
+          true
+        end
         @job.stub(:reload => true)
         subject.jobs_in_progress[job_id] = @job
+        JobDispatch.config.job_class.stub(:find) do |id|
+          raise StandardError, "Job not found" if id != @job.id
+          @job
+        end
       end
 
       context "and ask for another job" do
@@ -316,15 +330,58 @@ describe JobDispatch::Broker do
             result: 'the result'
         }) }
 
-        it "returns an error" do
+        it "returns 'thanks' anyway" do
+          JobDispatch.config.job_class.stub(:find).and_raise(StandardError, "Job not found")
           @result = subject.process_command(command)
           expect(@result).to be_a(Command)
-          expect(@result.parameters[:status]).to eq('error')
-          expect(@result.parameters[:message]).to be_present
+          expect(@result.parameters[:status]).to eq('thanks')
         end
       end
-    end
 
+
+      # This context is for when a job is being executed by a worker and the timeout has been reached.
+      # The broker will have purged the job from the list of jobs in progress, and the worker will be
+      # offline since it has not yet asked for more work to do. If the job completes successfully, the
+      # broker needs to update the status of the job to completed (or failed) appropriately, which will
+      # override any retry. In practice, long jobs should use the "touch" command to let the broker
+      # know that they are in fact still working on the job and to please extend the timeout deadline.
+      context "after the job has timed out" do
+        let(:command) { Command.new(worker_id, {
+            command: 'completed',
+            job_id: @job.id,
+            status: 'success',
+            result: 'the result',
+            ready: true,
+            queue: 'example'
+        }) }
+
+        before :each do
+          @job.stub(:as_json).and_return({status: @job.status, result: @job.result, id: @job.id})
+          @job.status = 1 # mark as in progress
+          JobDispatch.config.job_class.stub(:dequeue_job_for_queue).and_return(@job)
+
+          # simulate the job has expired:
+          @job.stub(:timed_out? => true)
+          subject.expire_timed_out_jobs
+        end
+
+        it "Updates the job status to be completed" do
+          subject.process_command(command)
+          expect(@job.status).to eq(JobDispatch::Job::COMPLETED)
+        end
+
+        it "adds the worker to the queue" do
+          subject.process_command(command)
+          expect(subject.queues[:example]).to include(worker_id)
+        end
+
+        it "marks the job as succeeded" do
+          @job.should_receive(:succeeded!).with('the result')
+          subject.process_command(command)
+        end
+
+      end
+    end
 
   end
 

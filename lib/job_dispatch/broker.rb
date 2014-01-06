@@ -65,7 +65,6 @@ module JobDispatch
     def run
       begin
         puts "JobDispatch::Broker running in process #{Process.pid}"
-        puts "yeah baby"
         JobDispatch.logger.info("JobDispatch::Broker running in process #{Process.pid}")
         @running = true
         poller = ZMQ::Poller.new
@@ -363,20 +362,27 @@ module JobDispatch
         jobs_in_progress_workers.delete(job_id)
         if job.is_a? InternalJob
           # no publish or save action required.
-        elsif job
-          job.reload
-          JobDispatch.logger.info(
-              "completed job #{job_id} from worker #{command.worker_id.to_json} status = #{command.parameters[:status]}")
-          if command.success?
-            job.succeeded!(command.parameters[:result])
-            publish_job_status(job)
-          else
-            job.failed!(command.parameters[:result])
-            publish_job_status(job)
-          end
         else
-          JobDispatch.logger.error("Job #{job_id} completed, but does not exist. Probably timed out!")
-          raise "No job"
+          # ensure the job record is up to date. Also in mongo, lock time is reduced by doing a read before
+          # doing an update.
+          begin
+            job = JobDispatch.config.job_class.find(job_id)
+          rescue StandardError => e
+            JobDispatch.logger.error("Job #{job_id} completed, but failed to reload from database: #{e}")
+            job = nil
+          end
+
+          if job
+            JobDispatch.logger.info(
+                "completed job #{job_id} from worker #{command.worker_id.to_json} status = #{command.parameters[:status]}")
+            if command.success?
+              job.succeeded!(command.parameters[:result])
+              publish_job_status(job)
+            else
+              job.failed!(command.parameters[:result])
+              publish_job_status(job)
+            end
+          end
         end
       end
     end
