@@ -1,5 +1,7 @@
 # encoding: UTF-8
 
+require 'active_support/core_ext/hash'
+
 module JobDispatch
 
   # This is a simple class for making synchronous calls to the Job Queue dispatcher.
@@ -14,7 +16,8 @@ module JobDispatch
       @socket.send(JSON.dump(options))
       json = @socket.recv
       #puts "Received: #{json}"
-      JSON.parse(json)
+      response = JSON.parse(json)
+      response.is_a?(Hash) ? response.with_indifferent_access : response
     end
 
     def method_missing(method, *args, ** kwargs)
