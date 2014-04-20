@@ -8,6 +8,9 @@ module JobDispatch
   #
   class Worker
 
+    class StopError < StandardError
+    end
+
     IDLE_TIME = 3
     IDLE_COUNT = 10
 
@@ -38,11 +41,12 @@ module JobDispatch
 
     def run
       @running = true
+      @running_thread = Thread.current
       while running?
-        puts "connecting"
+        # puts "connecting"
         connect
-        puts "asking for work"
-        ask_for_work
+        # puts "asking for work"
+        ask_for_work rescue StopError
 
         # if we are idle for too many times, the broker has restarted or gone away, and we will be stuck in receive
         # state, so we need to close the socket and make a new one to ask for work again.
@@ -60,13 +64,14 @@ module JobDispatch
               idle
               idle_count += 1
             end
-          rescue Interrupt
-            puts "Worker stopping."
-            JobDispatch.logger.info("Worker #{}")
+          rescue Interrupt, StopError
+            JobDispatch.logger.info("Worker stopping.")
             stop
             disconnect
+            # Tell the broker goodbye so that we are removed from the idle worker list and no more jobs will come here.
             connect
             send_goodbye
+            sleep(0.1) # let the socket send the message before we disconnect...
           end
         end
         disconnect
@@ -86,7 +91,10 @@ module JobDispatch
     end
 
     def stop
-      @running = false
+      if running?
+        @running_thread.raise StopError unless @running_thread == Thread.current
+        @running = false
+      end
     end
 
     def self.touch(timeout=nil)

@@ -67,6 +67,7 @@ module JobDispatch
         puts "JobDispatch::Broker running in process #{Process.pid}"
         JobDispatch.logger.info("JobDispatch::Broker running in process #{Process.pid}")
         @running = true
+        @running_thread = Thread.current
         poller = ZMQ::Poller.new
 
         @socket = JobDispatch::Broker::Socket.new(@worker_bind_address)
@@ -103,11 +104,21 @@ module JobDispatch
               process_quit
               sleep 1
             end
+          rescue StandardError => e
+            JobDispatch.logger.error "Unexpected exception: #{e}"
           end
         end
       ensure
         @socket.disconnect if @socket
         @socket = nil
+      end
+    end
+
+
+    def stop
+      if running?
+        @running = false
+        @running_thread.raise SignalException.new("TERM") unless Thread.current == @running_thread
       end
     end
 
@@ -282,7 +293,7 @@ module JobDispatch
     # remove a worker from available list. Worker is shutting down or indicating that it will no longer
     # be available for doing work.
     def remove_available_worker(command)
-      JobDispatch.logger.info("JobDispatch::Broker Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
+      JobDispatch.logger.info("JobDispatch::Broker Removing Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
 
       # the goodbye command is sent by another socket connection, so the worker_id (socket identity) will
       # not match the socket actually waiting for work.
