@@ -1,5 +1,5 @@
 require 'active_support/core_ext'
-require 'active_support/core_ext/object/json'
+require 'active_support/core_ext/object/to_json'
 
 module JobDispatch
   # Identity encapsulates a ZeroMQ socket identity, which is a string of binary characters, typically
