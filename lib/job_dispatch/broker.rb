@@ -100,9 +100,9 @@ module JobDispatch
               puts "JobDispatch::Broker shutting down, due to #{signal_name} signal"
               @running = false
               @status = "SHUTDOWN"
-              sleep 1
+              # sleep 1
               process_quit
-              sleep 1
+              sleep 1 # let ZMQ send the messages before we close the socket.
             end
           rescue StandardError => e
             JobDispatch.logger.error "Unexpected exception: #{e}"

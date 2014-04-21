@@ -119,7 +119,7 @@ module JobDispatch
     end
 
     def idle
-      puts "waiting for job to do…"
+      # puts "waiting for job to do…"
     end
   end
 end
