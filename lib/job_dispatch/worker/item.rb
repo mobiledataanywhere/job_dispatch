@@ -30,7 +30,11 @@ module JobDispatch
           @result = @klass.__send__(method.to_sym, *params)
           @status = :success
         rescue StandardError => ex
-          @result = ex
+          @result = {
+              class: ex.class.to_s,
+              message: ex.to_s,
+              backtrace: ex.backtrace,
+          }
           @status = :error
         ensure
           Thread.current["JobDispatch::Worker.job_id"] = nil
