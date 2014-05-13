@@ -14,7 +14,7 @@ module JobDispatch
     POLL_TIME = 5.123
     STOP_SIGNALS = %w[INT TERM KILL]
 
-    IdleWorker = Struct.new :worker_id, :idle_since, :queue, :worker_name
+    IdleWorker = Struct.new :worker_id, :idle_since, :queue, :worker_name, :idle_count
 
 
     # any object that will respond to `next_job_for_queue`, which should return a job, or nil if there
@@ -246,9 +246,10 @@ module JobDispatch
     def send_idle_commands(idle_time=nil)
       idle_time ||= Time.now
       idle_time -= WORKER_IDLE_TIME
-      idle_workers = @workers_waiting_for_jobs.select { |worker_id, worker| worker.idle_since < idle_time }
+      idle_workers = @workers_waiting_for_jobs.select { |worker_id, worker| worker.idle_since < idle_time || worker.idle_count == 0 }
       idle_workers.each do |worker_id, worker|
         send_job_to_worker(InternalJob.new('idle', worker.queue), worker_id)
+        worker.idle_count += 1
       end
     end
 
@@ -281,8 +282,16 @@ module JobDispatch
     # add a worker to the list of workers available for jobs.
     def add_available_worker(command)
       JobDispatch.logger.info("JobDispatch::Broker Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
+
+      # immediately remove any existing workers with the given name. If a worker has closed its connection and opened
+      # a new one (perhaps it started a long time before the broker did)
+
+      if command.worker_name # this is only sent on initial requests.
+        remove_worker_named(command.worker_name)
+      end
+
       queue = command.queue
-      idle_worker = IdleWorker.new(command.worker_id, Time.now, queue, command.worker_name)
+      idle_worker = IdleWorker.new(command.worker_id, Time.now, queue, command.worker_name, 0)
       workers_waiting_for_jobs[command.worker_id] = idle_worker
       queues[queue] << command.worker_id
       if command.worker_name # this is only sent on initial requests.
@@ -296,17 +305,20 @@ module JobDispatch
       JobDispatch.logger.info("JobDispatch::Broker Removing Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
 
       # the goodbye command is sent by another socket connection, so the worker_id (socket identity) will
-      # not match the socket actually waiting for work.
+      # not match the socket actually waiting for work. Remove the worker by its name, not socket identity
 
-      keys = worker_names.select { |id, name| name == command.worker_name }.keys
+      remove_worker_named(command.worker_name)
+      {status: "see ya later"}
+    end
+
+    def remove_worker_named(worker_name)
+      keys = worker_names.select { |id, name| name == worker_name }.keys
       keys.each do |worker_id|
         workers_waiting_for_reply.delete(worker_id) # socket will be closing, no need to send it anything.
         worker = workers_waiting_for_jobs.delete(worker_id)
         queues[worker.queue].delete(worker_id) if worker
         worker_names.delete(worker_id)
       end
-
-      {status: "see ya later"}
     end
 
     def dispatch_jobs_to_workers

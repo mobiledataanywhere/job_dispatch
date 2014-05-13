@@ -81,7 +81,6 @@ describe JobDispatch::Broker do
         subject.workers_waiting_for_reply << worker_id3
         subject.process_command(Command.new(worker_id3, {command: 'ready', worker_name: 'test worker 2'}))
 
-
         @job = FactoryGirl.build :job
         @socket = double('Broker::Socket', :send_command => nil)
         subject.stub(:socket => @socket)
@@ -165,6 +164,14 @@ describe JobDispatch::Broker do
       it "adds the worker's name to the hash of worker names" do
         @result = subject.process_command(command)
         expect(subject.worker_names[worker_id]).to eq('ruby worker')
+      end
+
+      let(:command2) { Command.new(worker_id2, {command: 'ready', queue: 'example', worker_name: 'ruby worker'}) }
+
+      it "duplicate ready has only 1 worker" do
+        @result = subject.process_command(command)
+        @result = subject.process_command(command2)
+        expect(subject.queues[:example].count).to eq(1)
       end
     end
 
@@ -405,34 +412,72 @@ describe JobDispatch::Broker do
         command = Command.new(worker_id2, {command: 'ready', queue: 'example'})
         @result = subject.process_command(command)
       end
-
     end
 
-    it "that have waited long enough receive idle commands" do
-      @socket.should_receive(:send_command) do |cmd|
-        expect(cmd.worker_id).to eq(worker_id)
-        expect(cmd.parameters[:command]).to eq('idle')
+    context "already done an idle" do
+      before do
+        JobDispatch::Broker::IdleWorker.any_instance.stub(:idle_count => 1)
       end
 
-      Timecop.freeze(@time + JobDispatch::Broker::WORKER_IDLE_TIME + 1) do
-        subject.send_idle_commands
+      it "that have waited long enough receive idle commands" do
+        @socket.should_receive(:send_command) do |cmd|
+          expect(cmd.worker_id).to eq(worker_id)
+          expect(cmd.parameters[:command]).to eq('idle')
+        end
+
+        Timecop.freeze(@time + JobDispatch::Broker::WORKER_IDLE_TIME + 1) do
+          subject.send_idle_commands
+        end
+
+        expect(subject.workers_waiting_for_reply).not_to include(worker_id)
+        expect(subject.queues[:example]).not_to include(worker_id)
       end
 
-      expect(subject.workers_waiting_for_reply).not_to include(worker_id)
-      expect(subject.queues[:example]).not_to include(worker_id)
+      it "that have not waited long enough are still waiting" do
+        @socket.should_receive(:send_command) do |cmd|
+          expect(cmd.worker_id).not_to eq(worker_id2)
+        end
+
+        Timecop.freeze(@time + JobDispatch::Broker::WORKER_IDLE_TIME + 1) do
+          subject.send_idle_commands
+        end
+
+        expect(subject.workers_waiting_for_reply).to include(worker_id2)
+        expect(subject.queues[:example]).to include(worker_id2)
+      end
     end
 
-    it "that have not waited long enough are still waiting" do
-      @socket.should_receive(:send_command) do |cmd|
-        expect(cmd.worker_id).not_to eq(worker_id2)
+    context "have not done an idle" do
+      before do
+        JobDispatch::Broker::IdleWorker.any_instance.stub(:idle_count => 0)
       end
 
-      Timecop.freeze(@time + JobDispatch::Broker::WORKER_IDLE_TIME + 1) do
-        subject.send_idle_commands
+      it "that have waited long enough receive idle commands" do
+        @socket.should_receive(:send_command) do |cmd|
+          expect(cmd.worker_id).to eq(worker_id)
+          expect(cmd.parameters[:command]).to eq('idle')
+        end
+
+        Timecop.freeze(@time + JobDispatch::Broker::WORKER_IDLE_TIME + 1) do
+          subject.send_idle_commands
+        end
+
+        expect(subject.workers_waiting_for_reply).not_to include(worker_id)
+        expect(subject.queues[:example]).not_to include(worker_id)
       end
 
-      expect(subject.workers_waiting_for_reply).to include(worker_id2)
-      expect(subject.queues[:example]).to include(worker_id2)
+      it "that have not waited long enough are still waiting" do
+        @socket.should_receive(:send_command) do |cmd|
+          expect(cmd.worker_id).not_to eq(worker_id2)
+        end
+
+        Timecop.freeze(@time + JobDispatch::Broker::WORKER_IDLE_TIME + 1) do
+          subject.send_idle_commands
+        end
+
+        expect(subject.workers_waiting_for_reply).not_to include(worker_id2)
+        expect(subject.queues[:example]).not_to include(worker_id2)
+      end
     end
   end
 
