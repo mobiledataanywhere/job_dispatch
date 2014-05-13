@@ -169,7 +169,7 @@ module JobDispatch
         case command.command
           when "ready"
             # add to list of workers who are ready for work
-            add_available_worker(command)
+            add_available_worker(command, 0)
 
             # don't reply, leaves worker blocked waiting for a job to do.
             reply = nil
@@ -183,7 +183,7 @@ module JobDispatch
 
             if command.worker_ready?
               # a completed job also means the worker is available for more work.
-              add_available_worker(command)
+              add_available_worker(command, 1)
               reply = nil
             else
               reply.parameters = {:status => 'thanks'}
@@ -280,7 +280,7 @@ module JobDispatch
 
 
     # add a worker to the list of workers available for jobs.
-    def add_available_worker(command)
+    def add_available_worker(command, idle_count=0)
       JobDispatch.logger.info("JobDispatch::Broker Worker '#{command.worker_id.to_json}' available for work on queue '#{command.queue}'")
 
       # immediately remove any existing workers with the given name. If a worker has closed its connection and opened
@@ -291,7 +291,7 @@ module JobDispatch
       end
 
       queue = command.queue
-      idle_worker = IdleWorker.new(command.worker_id, Time.now, queue, command.worker_name, 0)
+      idle_worker = IdleWorker.new(command.worker_id, Time.now, queue, command.worker_name, idle_count)
       workers_waiting_for_jobs[command.worker_id] = idle_worker
       queues[queue] << command.worker_id
       if command.worker_name # this is only sent on initial requests.
