@@ -11,7 +11,7 @@ module JobDispatch
   class Broker
 
     WORKER_IDLE_TIME = 10.123
-    POLL_TIME = 5.123
+    POLL_TIME = 31
     STOP_SIGNALS = %w[INT TERM KILL]
 
     IdleWorker = Struct.new :worker_id, :idle_since, :queue, :worker_name, :idle_count
@@ -127,7 +127,7 @@ module JobDispatch
       # TODO: calculate the amount of time to sleep to wake up such that a scheduled event happens as close
       # as possible to the time it was supposed to happen. This could additionally mean that the POLL_TIME
       # could be arbitrarily large. As any communication with the broker will wake it immediately.
-      poll_time = POLL_TIME
+      poll_time = JobDispatch.config.broker_options.try(:[], :poll_time) || POLL_TIME
       poller.poll(poll_time)
 
       if @wake_socket && poller.readables.include?(@wake_socket)
@@ -344,7 +344,6 @@ module JobDispatch
             job.expire_execution_at = Time.now + (job.timeout || Job::DEFAULT_EXECUTION_TIMEOUT)
             job.status = JobDispatch::Job::IN_PROGRESS
             job.save
-
             publish_job_status(job)
           end
         end
@@ -477,9 +476,9 @@ module JobDispatch
     # @return [Hash] result to be sent to client.
     def touch_job(command)
       job_id = command.parameters[:job_id]
-      timeout = command.parameters[:timeout] || Job::DEFAULT_EXECUTION_TIMEOUT
       job = @jobs_in_progress[job_id]
       if job
+        timeout = command.parameters[:timeout] || job.timeout || Job::DEFAULT_EXECUTION_TIMEOUT
         job.expire_execution_at = Time.now + timeout
         JobDispatch.logger.info("JobDispatch::Broker#touch timeout on job #{job_id} to #{job.expire_execution_at}")
         job.save

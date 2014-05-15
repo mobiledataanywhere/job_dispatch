@@ -8,11 +8,14 @@ module JobDispatch
     class Socket
 
       attr :socket
+      attr :touch_socket
       attr :item_class
 
       def initialize(connect_address, item_klass)
         @socket = JobDispatch.context.socket(ZMQ::REQ)
         @socket.connect(connect_address)
+        @touch_socket = JobDispatch.context.socket(ZMQ::DEALER)
+        @touch_socket.connect(connect_address)
         @item_class = item_klass
       end
 
@@ -45,8 +48,9 @@ module JobDispatch
       #
       # @return [JobDispatch::Item] the item to be processed (or nil if there isn't a valid job)
       def read_item
-        json = @socket.recv
         begin
+          drain_touch_socket
+          json = @socket.recv
           params = JSON.parse(json)
           case params["command"]
             when "job"
@@ -65,6 +69,14 @@ module JobDispatch
           nil
         end
         item
+      end
+
+      # drain any messages that may have been received on the touch socket.
+      def drain_touch_socket
+        loop do
+          message = @touch_socket.recv_nonblock
+          break if message.nil?
+        end
       end
 
       # after execution, send the response.
@@ -86,11 +98,8 @@ module JobDispatch
             job_id: job_id
         }
         hash[:timeout] = timeout if timeout
-        @socket.send(JSON.dump(hash))
-        json = @socket.recv # wait for acknowledgement... this could be done via pub/sub to be asynchronous.
-        JSON.parse(json) rescue {:error => "Failed to decode JSON from dispatcher: #{json}"}
+        @touch_socket.send(JSON.dump(hash))
       end
-
     end
   end
 end
