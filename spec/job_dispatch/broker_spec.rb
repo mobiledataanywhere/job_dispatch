@@ -644,7 +644,6 @@ describe JobDispatch::Broker do
     end
   end
 
-
   context "'notify'" do
 
     before :each do
@@ -779,4 +778,61 @@ describe JobDispatch::Broker do
     end
   end
 
+  context "last" do
+    let(:json){ {'id' => '12341234', 'target' => 'Example', 'method' => 'method'}}
+    before do
+      @job_class = double('JobClass')
+      JobDispatch.config.job_class = @job_class
+    end
+    it "returns last job in specified queue" do
+      command = Command.new(:client, {command: 'last', queue: 'ruby'})
+      relation = double('relation')
+      @job_class.should_receive(:where).with(queue: 'ruby').and_return(relation)
+      relation.should_receive(:last).and_return(double("job", id: "12341234", as_json: json))
+      result = subject.process_command(command)
+      expect(result.parameters).to eq({status: 'success', job: json})
+    end
+    it "returns last job in default queue" do
+      command = Command.new(:client, {command: 'last'})
+      relation = double('relation')
+      @job_class.should_receive(:where).with(queue: 'default').and_return(relation)
+      relation.should_receive(:last).and_return(double("job", id: "12341234", as_json: json))
+      result = subject.process_command(command)
+      expect(result.parameters).to eq({status: 'success', job: json})
+    end
+    it "handles no last job" do
+      command = Command.new(:client, {command: 'last'})
+      relation = double('relation')
+      @job_class.should_receive(:where).with(queue: 'default').and_return(relation)
+      relation.should_receive(:last).and_return(nil)
+      result = subject.process_command(command)
+      expect(result.parameters).to eq({status: 'error', message: 'no last job'})
+    end
+  end
+
+  context "fetch" do
+    before do
+      @job_class = double('JobClass')
+      JobDispatch.config.job_class = @job_class
+    end
+    it "returns the job" do
+      command = Command.new(:client, {command: 'fetch', job_id: '12341234'})
+      json = {'id' => '12341234', 'queue' => 'ruby', 'target' => 'String', 'method' => 'new'}
+      job = double("Job", as_json: json)
+      @job_class.should_receive(:find).with('12341234').and_return(job)
+      result = subject.process_command(command)
+      expect(result.parameters).to eq({status: 'success', job: json})
+    end
+    it "returns error when job_id is not present" do
+      command = Command.new(:client, {command: 'fetch'})
+      result = subject.process_command(command)
+      expect(result.parameters[:status]).to eq('error')
+    end
+    it "returns error when job_id is not found" do
+      command = Command.new(:client, {command: 'fetch', job_id: '12341234'})
+      @job_class.should_receive(:find).with('12341234').and_raise(StandardError, "not found")
+      result = subject.process_command(command)
+      expect(result.parameters[:status]).to eq('error')
+    end
+  end
 end

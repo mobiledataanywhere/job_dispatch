@@ -34,14 +34,45 @@ module JobDispatch
       SynchronousProxy.new(self, target, options)
     end
 
-    def enqueue(job_attrs)
+    # Enqueue a job to be processed describe by the passed job attributes.
+    #
+    # Required attributes:
+    #   target: The target object that will execute the job. typically a class.
+    #   method: the message to be sent to the target.
+    # Optional:
+    #   parameters: an array of parameters to be passed to the method.
+    #   timeout: number of seconds after which the job is considered timed out and failed.
+    def enqueue(job_attrs={})
       send_request('enqueue', {job: job_attrs})
     end
 
+    # send a message to the dispatcher requesting to be notified when the job completes (or fails).
     def notify(job_id)
       send_request('notify', {job_id: job_id})
     end
 
+    # as the dispatcher what was the last job enqueued on the given queue (or default)
+    def last(queue=nil)
+      job_or_raise send_request('last', {queue: queue||'default'})
+    end
+
+    # fetch the complete details for hte last job
+    def fetch(job_id)
+      job_or_raise send_request('fetch', {job_id: job_id})
+    end
+
+    private
+    def job_or_raise(response)
+      if response.is_a?(Hash) && response[:status] == 'success'
+        response[:job]
+      else
+        p response
+        raise ClientError, response[:message]
+      end
+    end
+  end
+
+  class ClientError < StandardError
   end
 end
 

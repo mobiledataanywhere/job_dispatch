@@ -217,6 +217,12 @@ module JobDispatch
           when "enqueue"
             reply.parameters = create_job(command)
 
+          when "last"
+            reply.parameters = last_job(command)
+
+          when "fetch"
+            reply.parameters = fetch_job(command)
+
           when "quit"
             process_quit
             reply.parameters = {:status => 'bye'}
@@ -500,6 +506,35 @@ module JobDispatch
         {status: 'success', job_id: job.id.to_s}
       rescue StandardError => e
         JobDispatch.logger.error "JobDispatch::Broker#create_job error: #{e}"
+        JobDispatch.logger.error e.backtrace.join("\n")
+        {status: 'error', message: e.to_s}
+      end
+    end
+
+    def last_job(command)
+      begin
+        queue = command.parameters[:queue] || 'default'
+        job = job_source.where(:queue => queue).last
+        if job
+          {status: 'success', job: json_for_job(job)}
+        else
+          {status: 'error', message: 'no last job'}
+        end
+      rescue StandardError => e
+        JobDispatch.logger.error e.to_s
+        JobDispatch.logger.error e.backtrace.join("\n")
+        {status: 'error', message: e.to_s}
+      end
+    end
+
+    def fetch_job(command)
+      begin
+        raise "Missing parameter 'job_id'" unless command.parameters[:job_id]
+        job = job_source.find(command.parameters[:job_id])
+        raise "Job not found" unless job
+        {status: 'success', job: json_for_job(job)}
+      rescue StandardError => e
+        JobDispatch.logger.error e.to_s
         JobDispatch.logger.error e.backtrace.join("\n")
         {status: 'error', message: e.to_s}
       end
