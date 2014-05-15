@@ -594,7 +594,7 @@ describe JobDispatch::Broker do
       Timecop.freeze(@time) do
         subject.touch_job(Command.new(worker_id, {command: "touch", job_id: @job_id}))
       end
-      expect(@job.expire_execution_at).to eq(@time + JobDispatch::Job::DEFAULT_EXECUTION_TIMEOUT)
+      expect(@job.expire_execution_at).to eq(@time + @job.timeout)
     end
 
     it "updates the expire_execution_at time with a custom timeout" do
