@@ -233,6 +233,7 @@ module JobDispatch
         if reply_exceptions
           # all others reply over socket.
           JobDispatch.logger.error("JobDispatch::Broker #{e}")
+          JobDispatch.logger.error e.backtrace.join("\n")
           reply.parameters = {:status => 'error', :message => e.to_s}
         else
           # used during testing to raise errors so that Rspec can catch them as a test failure.
@@ -424,13 +425,15 @@ module JobDispatch
 
 
     def json_for_job(job)
-      hash = if job.respond_to? :as_job_queue_item
-               job.as_job_queue_item
-             else
-               job.as_json
-             end.with_indifferent_access
-      hash[:id] = hash[:id].to_s
-      hash
+      if job
+        hash = if job.respond_to? :as_job_queue_item
+                 job.as_job_queue_item
+               else
+                 job.as_json
+               end.with_indifferent_access
+        hash[:id] = hash[:id].to_s
+        hash
+      end
     end
 
 
@@ -497,6 +500,7 @@ module JobDispatch
         {status: 'success', job_id: job.id.to_s}
       rescue StandardError => e
         JobDispatch.logger.error "JobDispatch::Broker#create_job error: #{e}"
+        JobDispatch.logger.error e.backtrace.join("\n")
         {status: 'error', message: e.to_s}
       end
     end
