@@ -578,7 +578,7 @@ describe JobDispatch::Broker do
 
   context "touching a job" do
     before :each do
-      @time = Time.now
+      @time = Time.now.change(:usec => 0)
       # this worker will be IDLE
       @job = FactoryGirl.build :job, :expire_execution_at => @time + 5.seconds
       @job_id = @job.id.to_s
