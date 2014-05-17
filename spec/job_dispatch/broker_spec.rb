@@ -488,6 +488,8 @@ describe JobDispatch::Broker do
         @job = FactoryGirl.build :job
         @socket = double('Broker::Socket', :send_command => nil)
         subject.stub(:socket => @socket)
+        @job_class = double('JobClass')
+        JobDispatch.config.job_class = @job_class
       end
 
       it "the job is sent to an idle worker" do
@@ -497,10 +499,8 @@ describe JobDispatch::Broker do
           expect(cmd.parameters[:target]).to eq(@job.target)
         end
 
-        job_class = double('JobClass')
-        job_class.stub(:dequeue_job_for_queue).and_return(@job)
-        job_class.should_receive(:dequeue_job_for_queue).with('example')
-        JobDispatch.config.job_class = job_class
+        @job_class.stub(:dequeue_job_for_queue).and_return(@job)
+        @job_class.should_receive(:dequeue_job_for_queue).with('example')
 
         # send ready command => adds idle worker state
         subject.workers_waiting_for_reply << worker_id # simulating read_command
@@ -511,8 +511,28 @@ describe JobDispatch::Broker do
         }))
         expect(@result).to be_nil # no immediate response
         expect(subject.workers_waiting_for_jobs[worker_id]).not_to be_nil
+        subject.queues_ready[:example] = true
 
         subject.dispatch_jobs_to_workers
+      end
+
+      it "when no job is found, the queue is marked inactive" do
+        # send ready command => adds idle worker state
+        subject.workers_waiting_for_reply << worker_id # simulating read_command
+        @result = subject.process_command(Command.new(worker_id, {
+            command: 'ready',
+            queue: 'example',
+            worker_name: 'ruby worker',
+        }))
+
+        @job_class.stub(:dequeue_job_for_queue).and_return(nil)
+
+        expect(@result).to be_nil # no immediate response
+        expect(subject.workers_waiting_for_jobs[worker_id]).not_to be_nil
+        subject.queues_ready[:example] = true
+
+        subject.dispatch_jobs_to_workers
+        expect(subject.queues_ready[:example]).to be_false
       end
     end
 
@@ -608,10 +628,10 @@ describe JobDispatch::Broker do
   context "enqueue a job" do
     before :each do
       @job_attrs = FactoryGirl.attributes_for :job
+      JobDispatch.config.job_class = double('JobClass')
     end
 
     it "Creates a job" do
-      JobDispatch.config.job_class = double('JobClass')
       JobDispatch.config.job_class.should_receive(:create!).with(@job_attrs)
       command = Command.new(:some_client, {command: "enqueue", job: @job_attrs})
       subject.process_command(command)
@@ -619,7 +639,6 @@ describe JobDispatch::Broker do
 
     it "returns the job id" do
       job_id = 12345
-      JobDispatch.config.job_class = double('JobClass')
       JobDispatch.config.job_class.stub(:create! => double('Job', :id => job_id))
       command = Command.new(:some_client, {command: "enqueue", job: @job_attrs})
       result = subject.process_command(command)
@@ -628,7 +647,6 @@ describe JobDispatch::Broker do
     end
 
     it "returns an error if the arguments are no good" do
-      JobDispatch.config.job_class = double('JobClass')
       JobDispatch.config.job_class.stub(:create!).and_raise("no good") # simulate some database save error
       command = Command.new(:some_client, {command: "enqueue", job: @job_attrs})
       result = subject.process_command(command)
@@ -637,10 +655,16 @@ describe JobDispatch::Broker do
     end
 
     it "returns an error if the 'job' parameter is missing" do
-      JobDispatch.config.job_class = double('JobClass')
       command = Command.new(:some_client, {command: "enqueue"})
       result = subject.process_command(command)
       expect(result.parameters[:status]).to eq('error')
+    end
+
+    it "marks the queue as ready" do
+      JobDispatch.config.job_class.stub(:create! => double('Job', :id => 1))
+      command = Command.new(:some_client, {command: "enqueue", job: @job_attrs})
+      result = subject.process_command(command)
+      expect(subject.queues_ready[:default]).to be_true
     end
   end
 

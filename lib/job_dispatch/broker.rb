@@ -32,6 +32,7 @@ module JobDispatch
     attr :job_subscribers # Key: job_id, value: list of Socket Identities waiting for job completion notifications.
     attr :pub_socket
     attr_accessor :reply_exceptions
+    attr :queues_ready
 
     def initialize(worker_bind_address, wakeup_bind_address, publish_bind_address=nil)
       @worker_bind_address = worker_bind_address
@@ -48,6 +49,7 @@ module JobDispatch
       @jobs_in_progress_workers = {} #key: job_id, value: worker_id
       @worker_names = {} # Key: Symbol socket identity, value: String claimed name of worker
       @job_subscribers = {} # Key: job_id, value: list of Socket Identities waiting for job completion notifications.
+      @queues_ready = {} # Key: Symbol queue name, value: bool ready?
       @status = "OK"
       @reply_exceptions = true
 
@@ -301,6 +303,7 @@ module JobDispatch
       idle_worker = IdleWorker.new(command.worker_id, Time.now, queue, command.worker_name, idle_count)
       workers_waiting_for_jobs[command.worker_id] = idle_worker
       queues[queue] << command.worker_id
+      queues_ready[queue] = true
       if command.worker_name # this is only sent on initial requests.
         worker_names[command.worker_id] = command.worker_name
       end
@@ -330,9 +333,9 @@ module JobDispatch
 
     def dispatch_jobs_to_workers
       # dequeue jobs from database for each queue
-      @queues.each_pair do |queue, worker_ids|
+      queues.each_pair do |queue, worker_ids|
         # we only need to check the database if there are available workers in that queue
-        if worker_ids.count > 0
+        if worker_ids.count > 0 && queues_ready[queue]
           worker_id = worker_ids.first
 
           job = begin
@@ -352,6 +355,9 @@ module JobDispatch
             job.status = JobDispatch::Job::IN_PROGRESS
             job.save
             publish_job_status(job)
+          else
+            # no job. mark the queue as not ready so we don't repeatedly check for jobs in an empty queue.
+            queues_ready[queue] = false
           end
         end
       end
@@ -502,7 +508,9 @@ module JobDispatch
         raise MissingParameterError, "Missing 'job' from command" unless command.parameters[:job].present?
 
         job_attrs = command.parameters[:job]
+        job_attrs[:queue] ||= :default
         job = job_source.create!(job_attrs)
+        queues_ready[job_attrs[:queue].to_sym] = true
         {status: 'success', job_id: job.id.to_s}
       rescue StandardError => e
         JobDispatch.logger.error "JobDispatch::Broker#create_job error: #{e}"
