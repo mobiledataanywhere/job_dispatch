@@ -138,6 +138,7 @@ module JobDispatch
 
       if poller.readables.include?(socket.socket)
         command = read_command
+        JobDispatch.logger.debug("JobDispatch::Broker received command: #{command.command}(#{command.parameters.inspect})")
         reply = process_command(command)
         send_command(reply) if reply
       end

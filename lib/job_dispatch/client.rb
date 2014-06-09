@@ -62,6 +62,7 @@ module JobDispatch
     end
 
     private
+
     def job_or_raise(response)
       if response.is_a?(Hash) && response[:status] == 'success'
         response[:job]
