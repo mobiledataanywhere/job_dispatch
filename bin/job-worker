@@ -28,8 +28,6 @@ JobDispatch.load_config_from_yml('config/job_dispatch.yml', ENV["RAILS_ENV"])
 
 require File.expand_path('config/environment.rb', ROOT_DIR)
 
-JobDispatch.logger = Rails.logger
-
 endpoint = JobDispatch.config.broker[:connect]
 if endpoint.nil? || endpoint.empty?
   $stderr.puts "No Job Dispatch broker connect address has been specified."

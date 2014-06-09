@@ -36,6 +36,7 @@ module JobDispatch
               backtrace: ex.backtrace,
           }
           @status = :error
+          JobDispatch.logger.debug ex
         ensure
           Thread.current["JobDispatch::Worker.job_id"] = nil
           JobDispatch.logger.info "Worker completed job #{job_id}: #{target}.#{method}, status: #{@status}"

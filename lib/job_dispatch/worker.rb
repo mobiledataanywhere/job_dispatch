@@ -102,6 +102,7 @@ module JobDispatch
       job_id = Thread.current["JobDispatch::Worker.job_id"]
       if sock && job_id
         sock.send_touch(job_id, timeout)
+        JobDispatch.logger.debug { "touching job #{job_id}"}
       end
     end
 
