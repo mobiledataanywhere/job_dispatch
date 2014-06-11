@@ -500,6 +500,7 @@ module JobDispatch
         job.save
         {status: "success"}
       else
+        JobDispatch.logger.info("JobDispatch::Broker#touch job #{job_id} not in progress.")
         {status: "error", message: "the specified job does not appear to be in progress"}
       end
     end
