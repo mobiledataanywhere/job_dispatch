@@ -34,6 +34,13 @@ module JobDispatch
       SynchronousProxy.new(self, target, options)
     end
 
+    def close
+      if @socket
+        @socket.close
+        @socket = nil
+      end
+    end
+
     # Enqueue a job to be processed describe by the passed job attributes.
     #
     # Required attributes:
