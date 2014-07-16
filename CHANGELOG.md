@@ -1,5 +1,10 @@
 # job_dispatch change log
 
+## Version 0.1.0
+
+* Added 'num_tcp_connections' to status command response
+* Fixed leaking sockets from job-worker command.
+
 ## Version 0.0.2
 
 * Broker sends an idle command to a worker immediately upon connect. This helps recover from a case where a worker
