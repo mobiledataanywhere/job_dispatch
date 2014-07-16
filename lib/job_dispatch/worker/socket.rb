@@ -32,7 +32,14 @@ module JobDispatch
       end
 
       def close
-        @socket.close
+        if @socket
+          @socket.close rescue nil
+          @socket = nil
+        end
+        if @touch_socket
+          @touch_socket.close rescue nil
+          @touch_socket = nil
+        end
       end
 
       def identity
