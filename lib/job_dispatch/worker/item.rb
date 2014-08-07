@@ -30,6 +30,9 @@ module JobDispatch
           @result = @klass.__send__(method.to_sym, *params)
           @status = :success
         rescue StandardError => ex
+
+          notify_error(ex) rescue nil
+
           @result = {
               class: ex.class.to_s,
               message: ex.to_s,
@@ -41,6 +44,10 @@ module JobDispatch
           Thread.current["JobDispatch::Worker.job_id"] = nil
           JobDispatch.logger.info "Worker completed job #{job_id}: #{target}.#{method}, status: #{@status}"
         end
+      end
+
+      def notify_error(exception)
+        # subclass this to send error notifications
       end
     end
   end
