@@ -451,7 +451,7 @@ module JobDispatch
 
 
     def status_response
-      num_tcp_connections = `lsof -p #{Process.pid}`.split.select { |l| l=~ /TCP/ }.count
+      num_tcp_connections = `lsof -np #{Process.pid}`.split.select { |l| l=~ /TCP/ }.count
 
       response = {
           :status => status,
