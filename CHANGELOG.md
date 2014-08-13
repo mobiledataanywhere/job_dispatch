@@ -1,5 +1,10 @@
 # job_dispatch change log
 
+## Version 0.2.0
+
+* Added -n option to `lsof` to make status checks faster
+* Adding notify_error method to Worker::Item class for applications to report worker item execution errors.
+
 ## Version 0.1.0
 
 * Added 'num_tcp_connections' to status command response
