@@ -80,9 +80,9 @@ module JobDispatch
 
     def check_process_memory_usage
       current_memory_usage = `ps -p #{Process.pid} --no-headers -o rss`.to_i
-      JobDispatch.logger.debug { "Worker #{Process.pid} memory usage = #{current_memory_usage}"}
+      JobDispatch.logger.info { "Worker #{Process.pid} memory usage = #{current_memory_usage}"}
       if @worker_memory_limit > 0 && current_memory_usage > @worker_memory_limit
-        JobDispatch.logger.debug { "Worker #{Process.pid} memory usage has exceeded worker memory limit. #{current_memory_usage} exceeds #{@worker_memory_limit}. Stopping worker."}
+        JobDispatch.logger.info { "Worker #{Process.pid} memory usage has exceeded worker memory limit. #{current_memory_usage} exceeds #{@worker_memory_limit}. Stopping worker."}
         stop_worker
         exit 1
       end
