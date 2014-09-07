@@ -18,12 +18,17 @@ module JobDispatch
     attr :queue
     attr :item_class
 
-    def initialize(connect_address, options={})
+    def initialize(connect_address, options={}, worker_memory_limit=0)
       options ||= {}
       @connect_address = connect_address
       @queue = options[:queue] || 'default'
       @running = false
       @item_class = options[:item_class] || Worker::Item
+      if worker_memory_limit.nil?
+        @worker_memory_limit = 0
+      else
+        @worker_memory_limit = worker_memory_limit
+      end
     end
 
     def connect
@@ -59,23 +64,38 @@ module JobDispatch
             poller.poll(IDLE_TIME)
             if poller.readables.include?(socket.socket)
               process
+              check_process_memory_usage
               idle_count = 0
             else
               idle
               idle_count += 1
             end
           rescue Interrupt, StopError
-            JobDispatch.logger.info("Worker stopping.")
-            stop
-            disconnect
-            # Tell the broker goodbye so that we are removed from the idle worker list and no more jobs will come here.
-            connect
-            send_goodbye
-            sleep(0.1) # let the socket send the message before we disconnect...
+            stop_worker
           end
         end
         disconnect
       end
+    end
+
+    def check_process_memory_usage
+      current_memory_usage = `ps -p #{Process.pid} --no-headers -o rss`.to_i
+      JobDispatch.logger.debug { "Worker #{Process.pid} memory usage = #{current_memory_usage}"}
+      if @worker_memory_limit > 0 && current_memory_usage > @worker_memory_limit
+        JobDispatch.logger.debug { "Worker #{Process.pid} memory usage has exceeded worker memory limit. #{current_memory_usage} exceeds #{@worker_memory_limit}. Stopping worker."}
+        stop_worker
+        exit 1
+      end
+    end
+
+    def stop_worker
+      JobDispatch.logger.info("Worker stopping.")
+      stop
+      disconnect
+      # Tell the broker goodbye so that we are removed from the idle worker list and no more jobs will come here.
+      connect
+      send_goodbye
+      sleep(0.1) # let the socket send the message before we disconnect...
     end
 
     def ask_for_work
