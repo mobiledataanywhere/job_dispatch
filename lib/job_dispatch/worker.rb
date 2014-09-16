@@ -79,7 +79,9 @@ module JobDispatch
     end
 
     def check_process_memory_usage
-      current_memory_usage = `ps -p #{Process.pid} --no-headers -o rss`.to_i
+      # Fixed issue where --no-headers did not work on MAC
+      # http://stackoverflow.com/questions/11532188/how-to-get-rid-of-the-headers-in-a-ps-command-in-mac-os-x
+      current_memory_usage = `ps -p #{Process.pid} -o rss | awk 'NR>1'`.to_i
       JobDispatch.logger.info { "Worker #{Process.pid} memory usage = #{current_memory_usage}"}
       if @worker_memory_limit > 0 && current_memory_usage > @worker_memory_limit
         JobDispatch.logger.info { "Worker #{Process.pid} memory usage has exceeded worker memory limit. #{current_memory_usage} exceeds #{@worker_memory_limit}. Stopping worker."}
